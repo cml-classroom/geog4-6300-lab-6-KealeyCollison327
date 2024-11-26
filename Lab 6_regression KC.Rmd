@@ -1,0 +1,269 @@
+---
+title: 'Geog6300: Lab 6'
+output: github_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Regression
+
+```{r setup, message=FALSE, warning=FALSE}
+library(sf)
+library(tidyverse)
+```
+
+**Overview:**
+This lab focuses on regression techniques. You'll be analyzing the association of various physical and climatological characteristics in Australia with observations of several animals recorded on the citizen science app iNaturalist.
+
+###Data and research questions###
+
+Let's import the dataset.
+
+```{r}
+lab6_data<-st_read("data/aus_climate_inat.gpkg")
+```
+
+The dataset for this lab is a 1 decimal degree hexagon grid that has aggregate statistics for a number of variables:
+
+* ndvi: NDVI/vegetation index values from Landsat data (via Google Earth Engine). These values range from -1 to 1, with higher values indicating more vegetation.
+* maxtemp_00/20_med: Median maximum temperature (C) in 2000 or 2020 (data from SILO/Queensland government)
+* mintemp_00/20_med: Median minimum temperature (C) in 2020 or 2020 (data from SILO/Queensland government)
+* rain_00/20_sum: Total rainfall (mm) in 2000 or 2020 (data from SILO/Queensland government)
+* pop_00/20: Total population in 2000 or 2020 (data from NASA's Gridded Population of the World)
+* water_00/20_pct: Percentage of land covered by water at some point during the year in 2000 or 2020
+* elev_med: Median elevation (meters) (data from the Shuttle Radar Topography Mission/NASA)
+
+There are also observation counts from iNaturalist for several distinctively Australian animal species: the central bearded dragon, the common emu, the red kangaroo, the agile wallaby, the laughing kookaburra, the wombat, the koala, and the platypus.
+
+Our primary research question is how the climatological/physical variables in our dataset are predictive of the NDVI value. We will build models for 2020 as well as the change from 2000 to 2020. The second is referred to as a "first difference" model and can sometimes be more useful for identifying causal mechanisms.
+
+###Part 1: Analysis of 2020 data###
+
+We will start by looking at data for 2020. 
+
+**Question 1** _Create histograms for NDVI, max temp., min temp., rain, and population, and water in 2020 as well as elevation. Based on these graphs, assess the normality of these variables._
+
+```{r}
+ggplot(lab6_data,aes(x=ndvi_20_med))+
+  geom_histogram()
+
+ggplot(lab6_data,aes(x=maxtemp_20_med))+
+  geom_histogram()
+
+ggplot(lab6_data,aes(x=mintemp_20_med))+
+  geom_histogram()
+
+ggplot(lab6_data,aes(x=rain_20_sum))+
+  geom_histogram()
+
+ggplot(lab6_data,aes(x=pop_20))+
+  geom_histogram()
+
+ggplot(lab6_data,aes(x=water_20_pct))+
+  geom_histogram()
+
+ggplot(lab6_data,aes(x=elev_med))+
+  geom_histogram()
+```
+
+{Based off of thier histograms, none of these varibles look completely normal. NDVI's histogram looks like it is skewed to the right. Max temp's histogram looks like it is skewed to the left. Min temp's histogram looks like it is skewed to the left to a slighly lesser degree. Rain's histogram looks like it is right skewed. Population's histogram looks like it is skewed to the right to an exterme degree with alot of values at or near 0. Water's histogram also looks like it is extreamly skewed to the right with lots of 0 or near 0 values, and elevation's histogram looks like it is skewed to the right to a lesser degree.}
+
+**Question 2** _Use tmap to map these same variables using Jenks natural breaks as the classification method. For an extra challenge, use `tmap_arrange` to plot all maps in a single figure._
+
+```{r}
+library(tmap)
+
+tm1 <- tm_shape(lab6_data)+
+  tm_polygons("ndvi_20_med", style="jenks", palette = "brewer.rd_yl_gn")
+
+tm2 <- tm_shape(lab6_data)+
+  tm_polygons("maxtemp_20_med", style="jenks", palette = "brewer.yl_or_br")
+
+tm3 <- tm_shape(lab6_data)+
+  tm_polygons("mintemp_20_med", style="jenks", palette = "brewer.yl_or_br")
+
+tm4 <- tm_shape(lab6_data)+
+  tm_polygons("rain_20_sum", style="jenks", palette = "blues")
+
+tm5 <- tm_shape(lab6_data)+
+  tm_polygons("pop_20", style="jenks", palette = "brewer.yl_or_br")
+
+tm6 <- tm_shape(lab6_data)+
+  tm_polygons("water_20_pct", style="jenks",  palette = "blues")
+
+tm7 <- tm_shape(lab6_data)+
+  tm_polygons("elev_med", style="jenks")
+
+tmap_arrange(tm1, tm2, tm3, tm4, tm5, tm6, tm7, ncol = 2, nrow = 4)
+```
+
+
+**Question 3** _Based on the maps from question 3, summarise major patterns you see in the spatial distribution of these data from any of your variables of interest. How do they appear to be associated with the NDVI variable?_
+
+{The map of the NDVI shoes that vegitation is mainly concentrated on the outer parts of Australia. The temperature maps shows that it is generally hotter in the top parts of Australia and cooler in the lower areas. Rain also appears to be concentrated on the outer parts of Australia and appers lines up fairly closely to vergetation. The popualtion map shows that most people are living in the bottom right areas in autralia where there is more vegitation. Water is somewhat concentrated on the outer areas and middle right parts of autralia. Fianlly elevation appears to be higher in the inner left and outer right parts of Australia. }
+
+**Question 4** _Create univariate models for each of the variables listed in question 1, with NDVI in 2020 as the dependent variable. Print a summary of each model. Write a summary of those results that indicates the direction, magnitude, and significance for each model coefficient._
+
+```{r}
+model1 <- lm(ndvi_20_med ~ maxtemp_20_med, data = lab6_data)
+summary(model1)
+
+model2 <- lm(ndvi_20_med ~ mintemp_20_med, data = lab6_data)
+summary(model2)
+
+model3 <- lm(ndvi_20_med ~ rain_20_sum, data = lab6_data)
+summary(model3)
+
+model4 <- lm(ndvi_20_med ~ pop_20, data = lab6_data)
+summary(model4)
+
+model5 <- lm(ndvi_20_med ~ water_20_pct, data = lab6_data)
+summary(model5)
+
+model6 <- lm(ndvi_20_med ~ elev_med, data = lab6_data)
+summary(model6)
+```
+
+{The coefficient for the model with max temperature was -0.013, and the direction is negative, which means that on average as max temperature increases by 1 degree C, the NDVI decreases by 0.013 all else equal. This model was significant and had a very small p-value.
+
+The coefficient for the model with min temperature was -0.012. Similar to before, the direction is negative. This means that on average as min temperature increases by 1 degree C, the NDVI decreases by 0.012. This model was significant and had a very small p-value. 
+
+The coefficient for the model with rain was 9.124e-07 or 0.0000009124. The direction is positive which means that on average as total rainfall increases by 1mm, the NDVI increases by 9.124e-07. This model was significant and had a very small p-value.
+
+The coefficient for the model with population was 1.500e-06 or 0.0000015. The direction is also positive. This means that on average as population increases by 1, the NDVI increases by 1.500e-06. This model was significant and had a very small p-value.
+
+The coefficient for the model with water was -0.178. The direction is surprisingly negative which means that on average as of the amount land covered by water increase by 1%, the NDVI decreases by 0.178. This model was not very significant and had a p-value of 0.249.
+
+The coefficient for the model with elevation was 1.787e-04 or 0.0001787. The direction is positive which means that on average as median elevation increases by 1 meter, the NDVI increases by 1.787e-04. This model was significant and had a very small p-value.}
+
+**Question 5** _Create a multivariate regression model with the variables of interest, choosing EITHER max or min temperature (but not both) You may also choose to leave out any variables that were insignificant in Q4. Use the univariate models as your guide. Call the results._
+
+```{r}
+model7 <- lm(ndvi_20_med ~ maxtemp_20_med + rain_20_sum + pop_20 + elev_med, data = lab6_data)
+summary(model7)
+```
+
+**Question 6** _Summarize the results of the multivariate model. What are the direction, magnitude, and significance of each coefficient? How did it change from the univariate models you created in Q4 (if at all)? What do the R2 and F-statistic values tell you about overall model fit?_
+
+{The multivariate model I used had NDVI as the dependent variable and max temperature, rain, population, and elevation as the independent variables. 
+
+The coefficient for max temperature was -1.170e-02 or -0.0117. The (absolute value) magnitude of this coefficient was slightly smaller than than it was in the univariate regression. It's direction was still negative and significant with a very small p-value. This means that on average as max temperature increases by 1 degree C, the NDVI decreases by 0.0117.
+
+The coefficient for rain was 8.469e-07 or 0.0000008469 which was also slightly smaller than it was than it was in the univariate regression. Its direction was positive and it was also significant with a very small p-value. This means that on average as rainfall increases by 1mm, the NDVI increases by 8.469e-07.
+
+The coefficient for population was 2.862e-07 or 0.0000002862, and it's magnitude was smaller than it was in the univariate regression. It's direction was positive, and it was significant at the 0.001 level. This means that on average as population increases by 1, the NDVI increases by 2.862e-07.
+
+The coefficient for elevation was 1.233e-04 or 0.0001233. The magnitude for this coefficient was slightly smaller that it was in with the univariate regression. It's direction was positive, and it was significant with a very small p-value. This means that on average as elevation increases by 1 meter, the NDVI increases by 1.233e-04.
+
+The R2 for this model was 0.6397 indicating that about 64% of the variation in the NDVI variable could be explained by the model. The F-statistic was 315.5 with a very small p-value meaning that the model used was better than one with no independent variables and the variables included improve the model fit.}
+
+**Question 7** _Use a histogram and a map to assess the normality of residuals and any spatial autocorrelation. Summarise any notable patterns that you see._
+
+```{r}
+lab6_data$residuals7<-residuals(model7)
+
+ggplot(lab6_data,aes(x=residuals7))+
+  geom_histogram()
+
+tm_shape(lab6_data) +
+  tm_dots("residuals7",size=0.5)
+
+tm_shape(lab6_data)+
+  tm_polygons("residuals7", style="jenks", palette = "brewer.rd_yl_gn")
+
+```
+
+{The residuals do not appear to be completly normal. A histogram of the residuals revels a slight tail on the negative side. When mapping the residuals the more extreme positive and negative values appear to be concentrated on the outskirts of Australia.}
+
+**Question 8** _Assess any issues with multicollinearity or heteroskedastity in this model using the techniques shown in class. Run the appropriate tests and explain what their results show you._
+
+```{r}
+#Code goes here
+library(car)
+vif(model7)
+library(lmtest)
+bptest(model7)
+
+```
+
+{I ran a vif test to check for multicollinearity. None of the results of this test are above 5 for any of the independent variables meaning that there in not substantial levels of multicollinearity in the model I used.
+
+I ran a Breusch-Pagan test to check for heteroskedastity. The p-value of the test was whcih suggests the there is heteroskedastity. }
+
+**Question 9** _How would you summarise the results of this model in a sentence or two? In addition, looking at the full model and your diagnostics, do you feel this is a model that provides meaningful results? Explain your answer._
+
+```{r}
+#Discussion here
+```
+
+The model above explains a decent amount of the variation in NDVI and indicates that in Australia temperature has a significant negative relationship with vegetation, and rain, population, and elevation are significantly and positively related to vegetation. However, there might be some issues with the estimation and interpretation of this model due to the potential presence of heteroskedastity, spatial autocorrelation, and non normal residuals. I would not count on this model for very precise and accurate estimates, but, despite the issues with the model, I still think the results have value and can give someone a general idea of the relationship between vegetation and other factors in Australia.  
+
+**Disclosure of assistance:** _Besides class materials, what other sources of assistance did you use while completing this lab? These can include input from classmates, relevant material identified through web searches (e.g., Stack Overflow), or assistance from ChatGPT or other AI tools. How did these sources support your own learning in completing this lab?_
+
+{For question 2, I looked up how to use tmap_arrange and adapted some code I saw in a Stack Overflow response. I also looked up the different options for color palettes and picked some to use from a variety of sources. 
+For question 6, I looked up how to interpret the f statistic to double check if my interpretation was correct.}
+
+**Lab reflection:** _How do you feel about the work you did on this lab? Was it easy, moderate, or hard? What were the biggest things you learned by completing it?_
+
+{I believe that most of the work was easy, but remembering how to use different aspects tmap and interpresting some of the tests and results was of moderate difficulty. I leaned how to use tmap_arrange and got a review of many of the potetial issues and test I should be looking for when regression are used for anlysis of data.}
+
+
+**Challenge question**
+
+#Option 1
+Create a first difference model. To do that, subtract the values in 2000 from the values in 2020 for each variable for which that is appropriate. Then create a new model similar to the one you created in question 5, but using these new variables showing the *change in values* over time. Call the results of the model, and interpret the results in the same ways you did above. Also chart and map the residuals to assess model error. Finally, write a short section that summarises what, if anything, this model tells you. 
+
+```{r}
+lab6_data$maxtemp_diff <- lab6_data$maxtemp_20_med - lab6_data$maxtemp_00_med
+lab6_data$rain_diff <- lab6_data$rain_20_sum - lab6_data$rain_00_sum
+lab6_data$ndvi_diff <- lab6_data$ndvi_20_med - lab6_data$rain_00_sum
+lab6_data$water_diff <- lab6_data$water_20_pct - lab6_data$water_00_pct
+lab6_data$pop_diff <- lab6_data$pop_20 - lab6_data$pop_00
+
+model8 <- lm(ndvi_diff ~ water_diff, data = lab6_data)
+summary(model8)
+
+model9 <- lm(ndvi_diff ~ maxtemp_diff + rain_diff + water_diff + pop_diff + elev_med, data = lab6_data)
+summary(model9)
+
+lab6_data$residuals9<-residuals(model9)
+
+ggplot(lab6_data,aes(x=residuals9))+
+  geom_histogram()
+
+tm_shape(lab6_data) +
+  tm_dots("residuals9",size=0.5)
+
+tm_shape(lab6_data)+
+  tm_polygons("residuals9", style="jenks", palette = "brewer.rd_yl_gn")
+
+```
+
+The model above uses the change in NDVI as the dependent variable and the differences in max temperature, rain, water, and population, as well as elevation as the independent variables. 
+
+The coefficient of the change in max temperature is 5.617e+03. It has a positive direction, but is not significant with a p-value of 0.0960. 
+
+The coefficient of the change in rain is 1.203. This is positive and significant meaning that a increase in rainfall by 1mm was associated with a 5.617e+03 increase in the NDVI. The p-value for this coefficient was very small.
+
+The coefficient of the change in water was -6.495e+05. It has a negative direction and is significant with a very small p-value, which indicates that on average as of the amount land covered by water increase by 1%, the NDVI decreases by 6.495e+05.
+
+The coefficient of the change in population was -3.216e+00. It's direction is also negative and it is also significant with a very small p-value. This means that as population increases by 1, the NDVI decreases by 3.216. 
+
+The coefficient of elevation is -5.041e+01. The direction of this is negative and it is significant at the 0.05 level. This means that as median elevation increses by 1 meter, the NDVI decreases by -5.041e+01.
+
+The histogram of the residuals is skewed left, and the map of residuals shows a concentration of very low values on the outskirts of Australia. 
+
+This model accounts for about 39% of the variation in the changes of vegetation, and tells me that in general, the relationship between changes in vegetation and rain is positive, while the relationship between changes in vegetation and population and elevation are negative. The residuals of the model are not completely normal and there still might be spacial autocorrelation.    
+
+
+#Option 2
+The animal data included in this dataset is an example of count data, and usually we would use a Poisson or similar model for that purpose. Let's try it with regular OLS regression though. Create two regression models to assess how the counts of two different animals (say, koalas and emus) are associated with at least three of the environmental/climatological variables given above. Be sure to use the same independent variables in each model. Interpret the results of each model and then explain the importance of any differences in the model coefficients between them, focusing on direction, magnitude, and significance.
+
+```{r}
+
+```
+
